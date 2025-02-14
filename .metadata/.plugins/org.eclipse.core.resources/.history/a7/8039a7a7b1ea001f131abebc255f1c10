@@ -1,0 +1,80 @@
+/*
+******************************************************************************
+** @file        : LinkerScript.ld
+** @brief       : Linker script for STM32F103RB with Bootloader and User Application
+**
+** Target      : STMicroelectronics STM32F103RB (128KB Flash, 20KB RAM)
+**
+******************************************************************************
+*/
+
+ENTRY(Reset_Handler)
+
+/* Define Flash and RAM Memory Layout */
+MEMORY
+{
+  RAM         (xrw)  : ORIGIN = 0x20000000,  LENGTH = 20K  /* RAM */
+  FLASH_BOOT  (rx)   : ORIGIN = 0x08000000,  LENGTH = 16K  /* Bootloader (0x08000000 - 0x08003FFF) */
+  FLASH_APP   (rx)   : ORIGIN = 0x08004000,  LENGTH = 112K /* User App (0x08004000 - 0x0801FFFF) */
+}
+
+/* Sections */
+SECTIONS
+{
+  /* Bootloader Vector Table (placed at 0x08000000) */
+  .isr_vector :
+  {
+    . = ALIGN(4);
+    KEEP(*(.isr_vector)) /* Startup vector table */
+    . = ALIGN(4);
+  } >FLASH_BOOT
+
+  /* Bootloader Code (kept in the first 16KB) */
+  .text.bootloader :
+  {
+    . = ALIGN(4);
+    *(.text.bootloader)   /* Bootloader code */
+    *(.rodata.bootloader) /* Bootloader read-only data */
+    . = ALIGN(4);
+  } >FLASH_BOOT
+
+  /* User Application (starts at 0x08004000) */
+  .text.user_application :
+  {
+    . = 0x08004000;  /* Set user application entry point at 0x08004000 */
+    *(.isr_vector_user)   /* Vector table for user application */
+    *(.text)              /* User application code */
+    *(.rodata)            /* Read-only data */
+    . = ALIGN(4);
+  } >FLASH_APP
+
+  /* Initialized Data Section (RAM) */
+  _sidata = LOADADDR(.data);
+  .data :
+  {
+    . = ALIGN(4);
+    _sdata = .;
+    *(.data)
+    *(.data*)
+    . = ALIGN(4);
+    _edata = .;
+  } >RAM AT> FLASH_APP
+
+  /* Uninitialized Data Section (RAM) */
+  .bss :
+  {
+    _sbss = .;
+    *(.bss)
+    *(.bss*)
+    *(COMMON)
+    . = ALIGN(4);
+    _ebss = .;
+  } >RAM
+
+  /* Heap and Stack */
+  _Min_Heap_Size = 0x400;
+  _Min_Stack_Size = 0x800;
+
+  /* Ensure stack starts at end of RAM */
+  _estack = ORIGIN(RAM) + LENGTH(RAM);
+}

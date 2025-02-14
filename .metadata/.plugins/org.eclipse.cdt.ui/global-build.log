@@ -1,0 +1,36 @@
+22:21:37 **** Incremental Build of configuration Debug for project CustomBootloaderSTM32F103RB ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32F103xB -c -I../Core/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32F1xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+../Core/Src/main.c: In function 'bootloader_handle_getver_cmd':
+../Core/Src/main.c:406:9: warning: implicit declaration of function 'sprintf' [-Wimplicit-function-declaration]
+  406 |         sprintf(debug_msg, "BL_DEBUG_MSG: Sending Version: 0x%X\n", bl_version);
+      |         ^~~~~~~
+../Core/Src/main.c:406:9: warning: incompatible implicit declaration of built-in function 'sprintf'
+../Core/Src/main.c:27:1: note: include '<stdio.h>' or provide a declaration of 'sprintf'
+   26 | #include "stdarg.h"
+  +++ |+#include <stdio.h>
+   27 | #define USER_APP_ADDRESS  0x8004000  // �?ịa chỉ bắt đầu của firmware user
+At top level:
+../Core/Src/main.c:315:13: warning: 'MX_USART3_UART_Init' defined but not used [-Wunused-function]
+  315 | static void MX_USART3_UART_Init(void)
+      |             ^~~~~~~~~~~~~~~~~~~
+../Core/Src/main.c:249:13: warning: 'MX_USART1_UART_Init' defined but not used [-Wunused-function]
+  249 | static void MX_USART1_UART_Init(void)
+      |             ^~~~~~~~~~~~~~~~~~~
+arm-none-eabi-gcc -o "CustomBootloaderSTM32F103RB.elf" @"objects.list"   -mcpu=cortex-m3 -T"C:\Users\ASUS\Desktop\Custom-bootloader-STM32F103RB\CustomBootloaderSTM32F103RB\STM32F103RBTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="CustomBootloaderSTM32F103RB.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: CustomBootloaderSTM32F103RB.elf
+ 
+arm-none-eabi-size   CustomBootloaderSTM32F103RB.elf 
+arm-none-eabi-objdump -h -S  CustomBootloaderSTM32F103RB.elf  > "CustomBootloaderSTM32F103RB.list"
+arm-none-eabi-objcopy  -O ihex  CustomBootloaderSTM32F103RB.elf  "CustomBootloaderSTM32F103RB.hex"
+arm-none-eabi-objcopy  -O binary  CustomBootloaderSTM32F103RB.elf  "CustomBootloaderSTM32F103RB.bin"
+   text	   data	    bss	    dec	    hex	filename
+  10220	    120	   2024	  12364	   304c	CustomBootloaderSTM32F103RB.elf
+Finished building: default.size.stdout
+ 
+Finished building: CustomBootloaderSTM32F103RB.bin
+Finished building: CustomBootloaderSTM32F103RB.hex
+ 
+Finished building: CustomBootloaderSTM32F103RB.list
+ 
+ 
