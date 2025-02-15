@@ -23,7 +23,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "string.h"
-#define USER_APP_ADDRESS  0x08004000  // Địa chỉ bắt đầu của firmware user
+#include "stdarg.h"
+#define USER_APP_ADDRESS  0x8004000
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -41,12 +42,15 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+CRC_HandleTypeDef hcrc;
+
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
-
+#define BL_RX_LEN  200
+uint8_t bl_rx_buffer[BL_RX_LEN];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -55,40 +59,70 @@ static void MX_GPIO_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_USART3_UART_Init(void);
+static void MX_CRC_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+uint8_t help_command[] = {BL_GET_VER , BL_GET_HELP, BL_GET_CID, BL_GET_RDP_STATUS, BL_GO_TO_ADDR, BL_FLASH_ERASE, BL_MEM_WRITE,
+		                 BL_EN_RW_PROTECT,BL_MEM_READ, BL_READ_SECTOR_P_STATUS, BL_OTP_READ, BL_DIS_R_W_PROTECT};
 void send_uart_message(char *message) {
     HAL_UART_Transmit(&huart2, (uint8_t*)message, strlen(message), HAL_MAX_DELAY);
 }
-void bootloader_uart_read_data(){
-
+void printmsg(const char *msg) {
+    HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
 }
 
+void bootloader_uart_read_data(){
+      // Allocates at runtime
+//    if (!bl_rx_buffer) {
+//        send_uart_message("Memory allocation failed!\r\n");
+//        return;
+//    }
+	uint8_t rcv_len = 0;
+	while(1){
+		memset(bl_rx_buffer, 0, 200);
+		HAL_UART_Receive(&huart2, bl_rx_buffer, 1, HAL_MAX_DELAY);
+		rcv_len = bl_rx_buffer[0]; // extract the first byte as the length of message
+		HAL_UART_Receive(&huart2, &bl_rx_buffer[1], rcv_len, HAL_MAX_DELAY); // then read the remaining of the command
+		switch(bl_rx_buffer[1]){ //the second byte here is the command code,
+		case BL_GET_VER:
+			bootloader_handle_getver_cmd(bl_rx_buffer);
+			break;
+		case BL_GET_HELP:
+			bootloader_handle_gethelp_cmd(bl_rx_buffer);
+			break;
+		}
+
+	}
+
+}
 void bootloader_jump_to_user_app(void) {
-    // 1. Tắt ngắt toàn cục
-    __disable_irq();
+    __disable_irq();  // Disable all interrupts
 
-    // 2. Đặt lại VTOR để firmware user có vector table chính xác
-    SCB->VTOR = USER_APP_ADDRESS;
-
-    // 3. Lấy địa chỉ của Stack Pointer (SP) mới
     uint32_t user_app_stack_pointer = *((volatile uint32_t*) USER_APP_ADDRESS);
-
-    // 4. Lấy địa chỉ của Reset_Handler của firmware user
     uint32_t user_app_reset_address = *((volatile uint32_t*) (USER_APP_ADDRESS + 4));
 
+    if (user_app_reset_address == 0xFFFFFFFF || user_app_stack_pointer == 0xFFFFFFFF) {
+        send_uart_message("No valid application found. Staying in bootloader...\r\n");
+        return;
+    }
+
+    send_uart_message("Jumping to User Application...\r\n");
+
+    __set_MSP(user_app_stack_pointer);  // Set Main Stack Pointer
+
+    SCB->VTOR = USER_APP_ADDRESS;  // Set Vector Table Offset for User App
+
+    __DSB();  // Ensure all memory operations complete
+    __ISB();  // Flush instruction pipeline
+
     void (*user_app_reset_handler)(void) = (void (*)(void)) user_app_reset_address;
-
-    // 5. Thiết lập lại giá trị Stack Pointer
-    __set_MSP(user_app_stack_pointer);
-
-    // 6. Kích hoạt Reset_Handler của firmware user
-    user_app_reset_handler();
+    user_app_reset_handler();  // Jump to user application
 }
+
 
 
 /* USER CODE END 0 */
@@ -121,33 +155,29 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_USART1_UART_Init();
+  //MX_USART1_UART_Init();
   MX_USART2_UART_Init();
-  MX_USART3_UART_Init();
+  //MX_USART3_UART_Init();
+  MX_CRC_Init();
   /* USER CODE BEGIN 2 */
   //HAL_GPIO_EXTI_Callback(GPIO_PIN_13);
   /* USER CODE END 2 */
-  //send_uart_message("Jumping to User Code...\r\n");
-  //HAL_Delay(100);
-  bootloader_jump_to_user_app();
+  if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_RESET){
+	  //printmsg("Enter bootloader mode\n");
+	  bootloader_uart_read_data();
+  }else{
+	  printmsg("Jump to user application\n");
+	  bootloader_jump_to_user_app();
+
+  }
+
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-//  if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) ==  GPIO_PIN_RESET){ // in bootloader mode if user button pressed
-//	  send_uart_message("Hello, STM32!\r\n");
-//	  bootloader_uart_read_data();
-//
-//  }
-//  else{ // don't press, jump to user code
-//	  bootloader_jump_to_user_code();
-//  }
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-
-//      send_uart_message("Hello, STM32!\r\n");
-//      HAL_Delay(5000); // Gửi mỗi giây
 
 
   }
@@ -187,6 +217,32 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief CRC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_CRC_Init(void)
+{
+
+  /* USER CODE BEGIN CRC_Init 0 */
+
+  /* USER CODE END CRC_Init 0 */
+
+  /* USER CODE BEGIN CRC_Init 1 */
+
+  /* USER CODE END CRC_Init 1 */
+  hcrc.Instance = CRC;
+  if (HAL_CRC_Init(&hcrc) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN CRC_Init 2 */
+
+  /* USER CODE END CRC_Init 2 */
+
 }
 
 /**
@@ -307,8 +363,8 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : PC13 */
   GPIO_InitStruct.Pin = GPIO_PIN_13;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA0 */
@@ -324,23 +380,129 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
-
 }
 
 /* USER CODE BEGIN 4 */
+void  bootloader_uart_read_data(void);
+void bootloader_jump_to_user_app(void);
 
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+void bootloader_handle_getver_cmd(uint8_t *bl_rx_buffer)
 {
-    if (GPIO_Pin == GPIO_PIN_13)  // Kiểm tra đúng chân PC13
+    uint32_t bl_version;
+
+    //printmsg("BL_DEBUG_MSG:bootloader_handle_getver_cmd\n");
+
+    uint32_t command_packet_len = bl_rx_buffer[0] + 1;
+    uint32_t host_crc = *((uint32_t *)(bl_rx_buffer + command_packet_len - 4));
+
+    if (!bootloader_verify_crc(&bl_rx_buffer[0], command_packet_len - 4, host_crc))
     {
-    	send_uart_message("Hello, STM32!\r\n");
-    	//HAL_Delay(5000);
-    	//__HAL_GPIO_EXTI_CLEAR_IT(GPIO_Pin);
+        //printmsg("BL_DEBUG_MSG:checksum success !!\n");
+
+        // Send ACK first
+        bootloader_send_ack(bl_rx_buffer[0], 1);
+
+        // Retrieve bootloader version
+        bl_version = get_bootloader_version();
+
+        // DEBUG: Print version before sending
+        char debug_msg[50];
+        sprintf(debug_msg, "BL_DEBUG_MSG: Sending Version: 0x%X\n", bl_version);
+        //printmsg(debug_msg);
+
+        // Send the version
+        bootloader_uart_write_data(&bl_version, 1);
+    }
+    else
+    {
+        //printmsg("BL_DEBUG_MSG:checksum fail !!\n");
+        bootloader_send_nack();
     }
 }
+
+void bootloader_handle_gethelp_cmd(uint8_t *pBuffer){
+    uint32_t command_packet_len = bl_rx_buffer[0] + 1;
+    uint32_t host_crc = *((uint32_t *)(bl_rx_buffer + command_packet_len - 4));
+
+    if (!bootloader_verify_crc(&bl_rx_buffer[0], command_packet_len - 4, host_crc))
+    {
+        // Send ACK first
+        bootloader_send_ack(bl_rx_buffer[0], sizeof(help_command));
+        // Send the version
+        bootloader_uart_write_data(help_command, sizeof(help_command));
+    }
+    else
+    {
+        //printmsg("BL_DEBUG_MSG:checksum fail !!\n");
+        bootloader_send_nack();
+    }
+}
+void bootloader_handle_getcid_cmd(uint8_t *pBuffer);
+void bootloader_handle_getrdp_cmd(uint8_t *pBuffer);
+void bootloader_handle_go_cmd(uint8_t *pBuffer);
+void bootloader_handle_flash_erase_cmd(uint8_t *pBuffer);
+void bootloader_handle_mem_write_cmd(uint8_t *pBuffer);
+void bootloader_handle_en_rw_protect(uint8_t *pBuffer);
+void bootloader_handle_mem_read (uint8_t *pBuffer);
+void bootloader_handle_read_sector_protection_status(uint8_t *pBuffer);
+void bootloader_handle_read_otp(uint8_t *pBuffer);
+void bootloader_handle_dis_rw_protect(uint8_t *pBuffer);
+
+void bootloader_send_ack(uint8_t command_code, uint8_t follow_len)
+{
+	 //here we send 2 byte.. first byte is ack and the second byte is len value
+	uint8_t ack_buf[2];
+	ack_buf[0] = BL_ACK;
+	ack_buf[1] = follow_len;
+	HAL_UART_Transmit(&huart2,ack_buf,2,HAL_MAX_DELAY);
+
+}
+void bootloader_send_nack(void){
+	uint8_t nack = BL_NACK;
+	HAL_UART_Transmit(&huart2,&nack,1,HAL_MAX_DELAY);
+}
+
+uint8_t bootloader_verify_crc (uint8_t *pData, uint32_t len, uint32_t crc_host)
+{
+    uint32_t uwCRCValue=0xff;
+
+    for (uint32_t i=0 ; i < len ; i++)
+	{
+        uint32_t i_data = pData[i];
+        uwCRCValue = HAL_CRC_Accumulate(&hcrc, &i_data, 1);
+	}
+
+	 /* Reset CRC Calculation Unit */
+  __HAL_CRC_DR_RESET(&hcrc);
+
+	if( uwCRCValue == crc_host)
+	{
+		return VERIFY_CRC_SUCCESS;
+	}
+
+	return VERIFY_CRC_FAIL;
+}
+uint32_t get_bootloader_version(void){
+	return (uint32_t)BL_VERSION;
+}
+/* This function writes data in to C_UART */
+void bootloader_uart_write_data(uint8_t *pBuffer,uint32_t len)
+{
+    //Function used to send data from bootloader to Host
+	HAL_UART_Transmit(&huart2 ,pBuffer,len,HAL_MAX_DELAY);
+
+}
+
+uint16_t get_mcu_chip_id(void);
+uint8_t get_flash_rdp_level(void);
+uint8_t verify_address(uint32_t go_address);
+uint8_t execute_flash_erase(uint8_t sector_number , uint8_t number_of_sector);
+uint8_t execute_mem_write(uint8_t *pBuffer, uint32_t mem_address, uint32_t len);
+
+uint8_t configure_flash_sector_rw_protection(uint8_t sector_details, uint8_t protection_mode, uint8_t disable);
+
+uint16_t read_OB_rw_protection_status(void);
+
 /* USER CODE END 4 */
 
 /**

@@ -114,7 +114,7 @@ def serial_ports():
 def Serial_Port_Configuration(port):
     global ser
     try:
-        ser = serial.Serial(port,115200,timeout=2)
+        ser = serial.Serial(port,115200,timeout=5)
     except:
         print("\n   Oops! That was not a valid port")
         

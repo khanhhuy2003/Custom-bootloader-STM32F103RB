@@ -113,8 +113,8 @@ uint16_t read_OB_rw_protection_status(void);
 #define BL_DIS_R_W_PROTECT				0x5C
 
 /* ACK and NACK bytes*/
-#define BL_ACK   0xA5
-#define BL_NACK  0x7F
+#define BL_ACK   0XA5
+#define BL_NACK  0X7F
 
 /*CRC*/
 #define VERIFY_CRC_FAIL    1

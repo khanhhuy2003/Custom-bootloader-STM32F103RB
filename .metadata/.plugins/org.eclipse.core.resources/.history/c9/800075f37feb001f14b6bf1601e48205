@@ -449,7 +449,7 @@ void bootloader_handle_getcid_cmd(uint8_t *pBuffer){
         // Send ACK first
         bootloader_send_ack(bl_rx_buffer[0], 2);
         // Send the version
-        bootloader_uart_write_data((uint8_t*)&cid, 2);
+        bootloader_uart_write_data(&cid, 2);
     }
     else
     {
