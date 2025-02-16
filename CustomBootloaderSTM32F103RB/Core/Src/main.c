@@ -97,6 +97,9 @@ void bootloader_uart_read_data(){
 		case BL_GET_CID:
 			bootloader_handle_getcid_cmd(bl_rx_buffer);
 			break;
+		case BL_GET_RDP_STATUS:
+			bootloader_handle_getrdp_cmd(bl_rx_buffer);
+			break;
 		}
 
 	}
@@ -391,7 +394,7 @@ void bootloader_jump_to_user_app(void);
 
 void bootloader_handle_getver_cmd(uint8_t *bl_rx_buffer)
 {
-    uint32_t bl_version;
+    uint8_t bl_version;
 
     //printmsg("BL_DEBUG_MSG:bootloader_handle_getver_cmd\n");
 
@@ -403,16 +406,10 @@ void bootloader_handle_getver_cmd(uint8_t *bl_rx_buffer)
         //printmsg("BL_DEBUG_MSG:checksum success !!\n");
 
         // Send ACK first
-        bootloader_send_ack(bl_rx_buffer[0], 2);
+        bootloader_send_ack(bl_rx_buffer[0], 1);
 
         // Retrieve bootloader version
         bl_version = get_bootloader_version();
-
-        // DEBUG: Print version before sending
-        char debug_msg[50];
-        //sprintf(debug_msg, "BL_DEBUG_MSG: Sending Version: 0x%X\n", bl_version);
-        //printmsg(debug_msg);
-
         // Send the version
         bootloader_uart_write_data(&bl_version, 1);
     }
@@ -430,7 +427,7 @@ void bootloader_handle_gethelp_cmd(uint8_t *pBuffer){
     if (!bootloader_verify_crc(&bl_rx_buffer[0], command_packet_len - 4, host_crc))
     {
         // Send ACK first
-        bootloader_send_ack(bl_rx_buffer[0], sizeof(help_command));
+        bootloader_send_ack(pBuffer[0], sizeof(help_command));
         // Send the version
         bootloader_uart_write_data(help_command, sizeof(help_command));
     }
@@ -447,7 +444,7 @@ void bootloader_handle_getcid_cmd(uint8_t *pBuffer){
     if (!bootloader_verify_crc(&bl_rx_buffer[0], command_packet_len - 4, host_crc))
     {
         // Send ACK first
-        bootloader_send_ack(bl_rx_buffer[0], 2);
+        bootloader_send_ack(pBuffer[0], 2);
         // Send the version
         bootloader_uart_write_data((uint8_t*)&cid, 2);
     }
@@ -457,8 +454,49 @@ void bootloader_handle_getcid_cmd(uint8_t *pBuffer){
         bootloader_send_nack();
     }
 }
-void bootloader_handle_getrdp_cmd(uint8_t *pBuffer);
-void bootloader_handle_go_cmd(uint8_t *pBuffer);
+void bootloader_handle_getrdp_cmd(uint8_t *pBuffer){
+
+    uint32_t command_packet_len = bl_rx_buffer[0] + 1;
+    uint32_t host_crc = *((uint32_t *)(bl_rx_buffer + command_packet_len - 4));
+    uint16_t RDP_value = get_flash_rdp_level();
+    if (!bootloader_verify_crc(&bl_rx_buffer[0], command_packet_len - 4, host_crc))
+    {
+        // Send ACK first
+        bootloader_send_ack(pBuffer[0], 2);
+        // Send the version
+        bootloader_uart_write_data(RDP_value, 2);
+    }
+    else
+    {
+        //printmsg("BL_DEBUG_MSG:checksum fail !!\n");
+        bootloader_send_nack();
+    }
+}
+void bootloader_handle_go_cmd(uint8_t *pBuffer){
+	uint32_t command_packet_len = bl_rx_buffer[0] + 1;
+	uint32_t host_crc = *((uint32_t*)(bl_rx_buffer + command_packet_len - 4));
+	if (!bootloader_verify_crc(&bl_rx_buffer[0], command_packet_len - 4, host_crc)){
+		bootloader_send_ack(pBuffer[0], 2);
+		int goToAddress = (uint32_t*)&pBuffer[2]; // get all 4 bytes
+		if(verify_address(goToAddress) == ADDR_VALID){
+			HAL_UART_Transmit(&huart2, ADDR_VALID, 1, HAL_MAX_DELAY);
+
+            __disable_irq();
+
+            // Set MSP
+            __set_MSP(*(uint32_t*)goToAddress);
+            void (*Jump_To_APP)(void) = (void*)(*(uint32_t*)(goToAddress + 4));
+            Jump_To_APP();
+		}
+		else{
+			HAL_UART_Transmit(&huart2, ADDR_INVALID, 1, HAL_MAX_DELAY);
+		}
+	}
+	else{
+		bootloader_send_nack();
+	}
+
+}
 void bootloader_handle_flash_erase_cmd(uint8_t *pBuffer);
 void bootloader_handle_mem_write_cmd(uint8_t *pBuffer);
 void bootloader_handle_en_rw_protect(uint8_t *pBuffer);
@@ -520,8 +558,27 @@ uint16_t get_mcu_chip_id(void){
 	cid = (uint16_t)(DBGMCU->IDCODE) & 0x0FFF;
 	return cid;
 }
-uint8_t get_flash_rdp_level(void);
-uint8_t verify_address(uint32_t go_address);
+uint8_t get_flash_rdp_level(void){
+	uint8_t RDP_Status = 0;
+	volatile uint32_t* POB = (uint32_t* ) 0x1FFFF800;
+
+	RDP_Status = (uint8_t)(*POB >> 8);
+	return RDP_Status;
+}
+uint8_t verify_address(uint32_t go_address){
+	if(go_address >= FLASH_ADDR_START && go_address <= FLASH_ADDR_END){
+		return ADDR_VALID;
+	}
+	else if(go_address >= SYSMEM_ADDR_START && go_address <= SYSMEM_ADDR_END){
+		return ADDR_VALID;
+
+	}
+	else if(go_address >= SRAM_ADDR_START && go_address <= SRAM_ADDR_END){
+		return ADDR_VALID;
+	}
+	return ADDR_INVALID;
+
+}
 uint8_t execute_flash_erase(uint8_t sector_number , uint8_t number_of_sector);
 uint8_t execute_mem_write(uint8_t *pBuffer, uint32_t mem_address, uint32_t len);
 

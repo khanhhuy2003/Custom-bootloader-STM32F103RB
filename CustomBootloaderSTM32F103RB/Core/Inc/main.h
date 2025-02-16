@@ -34,6 +34,17 @@ extern "C" {
 /* USER CODE BEGIN Includes */
 /*Bootloader function prototypes */
 
+
+/*
+ * Base memory address
+ */
+#define FLASH_ADDR_START        0x08000000
+#define FLASH_ADDR_END          0x0801FFFF
+#define SYSMEM_ADDR_START       0x1FFFF000
+#define SYSMEM_ADDR_END         0x1FFFF7FF
+#define SRAM_ADDR_START         0x20000000
+#define SRAM_ADDR_END           0x20001FFF
+
 void  bootloader_uart_read_data(void);
 void bootloader_jump_to_user_app(void);
 
@@ -124,6 +135,7 @@ uint16_t read_OB_rw_protection_status(void);
 #define ADDR_INVALID 0x01
 
 #define INVALID_SECTOR 0x04
+
 
 /* USER CODE END Includes */
 
