@@ -476,37 +476,68 @@ void bootloader_handle_getrdp_cmd(uint8_t *pBuffer){
         bootloader_send_nack();
     }
 }
+//void bootloader_handle_go_cmd(uint8_t *pBuffer){
+//	uint32_t command_packet_len = bl_rx_buffer[0] + 1;
+//	uint32_t host_crc = *((uint32_t*)(bl_rx_buffer + command_packet_len - 4));
+//
+//	if (!bootloader_verify_crc(&bl_rx_buffer[0], command_packet_len - 4, host_crc)){
+//
+//		bootloader_send_ack(pBuffer[0], 1);
+//
+//		uint32_t goToAddress = *(uint32_t*)&pBuffer[2]; // get all 4 bytes
+//		if(verify_address(goToAddress) == ADDR_VALID){
+//			HAL_UART_Transmit(&huart2, ADDR_VALID, 1, HAL_MAX_DELAY);
+//
+//            __disable_irq();
+//
+//            // Set MSP
+//            __set_MSP(*(uint32_t*)goToAddress);
+//
+//            void (*Jump_To_APP)(void) = (void (*)(void))(*(volatile uint32_t*)(goToAddress + 4));
+//            Jump_To_APP();
+//		}
+//		else{
+//			HAL_UART_Transmit(&huart2, ADDR_INVALID, 1, HAL_MAX_DELAY);
+//		}
+//	}
+//	else{
+//		bootloader_send_nack();
+//	}
+//}
 void bootloader_handle_go_cmd(uint8_t *pBuffer){
-	uint32_t command_packet_len = bl_rx_buffer[0] + 1;
-	uint32_t host_crc = *((uint32_t*)(bl_rx_buffer + command_packet_len - 4));
+    uint32_t command_packet_len = bl_rx_buffer[0] + 1;
+    uint32_t host_crc = *((uint32_t*)(bl_rx_buffer + command_packet_len - 4));
 
-	if (!bootloader_verify_crc(&bl_rx_buffer[0], command_packet_len - 4, host_crc)){
+    if (!bootloader_verify_crc(&bl_rx_buffer[0], command_packet_len - 4, host_crc)) {
 
-		bootloader_send_ack(pBuffer[0], 1);
+        bootloader_send_ack(pBuffer[0], 1);
 
-		uint32_t goToAddress = *(uint32_t*)&pBuffer[2]; // get all 4 bytes
-		if(verify_address(goToAddress) == ADDR_VALID){
-			uint8_t addr_status = ADDR_VALID;
-			HAL_UART_Transmit(&huart2, addr_status, 1, HAL_MAX_DELAY);
+        uint32_t goToAddress = *(uint32_t*)&pBuffer[2]; // Get all 4 bytes
 
-            __disable_irq();
+        if (verify_address(goToAddress) == ADDR_VALID) {
+            uint8_t addr_status = ADDR_VALID;
+            HAL_UART_Transmit(&huart2, &addr_status, 1, HAL_MAX_DELAY);
 
-            // Set MSP
-            __set_MSP(*(uint32_t*)goToAddress);
+            __disable_irq();  // Disable all interrupts
+            __DSB();          // Ensure all memory operations complete
+            __ISB();          // Flush instruction pipeline
 
+            // Set the MSP (Main Stack Pointer)
+            __set_MSP(*(volatile uint32_t*)goToAddress);
+
+            // Jump to Application Reset Handler
             void (*Jump_To_APP)(void) = (void (*)(void))(*(volatile uint32_t*)(goToAddress + 4));
-            Jump_To_APP();
-		}
-		else{
-			uint8_t addr_status = ADDR_INVALID;
-			HAL_UART_Transmit(&huart2, addr_status, 1, HAL_MAX_DELAY);
-		}
-	}
-	else{
-		bootloader_send_nack();
-	}
+            Jump_To_APP();  // Execute application
+        }
+        else {
+            uint8_t addr_status = ADDR_INVALID;
+            HAL_UART_Transmit(&huart2, &addr_status, 1, HAL_MAX_DELAY);
+        }
+    }
+    else {
+        bootloader_send_nack();
+    }
 }
-
 
 void bootloader_handle_flash_erase_cmd(uint8_t *pBuffer);
 void bootloader_handle_mem_write_cmd(uint8_t *pBuffer);

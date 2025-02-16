@@ -1,9 +1,11 @@
-14:03:40 **** Incremental Build of configuration Debug for project CustomBootloaderSTM32F103RB ****
+17:13:57 **** Incremental Build of configuration Debug for project CustomBootloaderSTM32F103RB ****
 make -j8 all 
 arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32F103xB -c -I../Core/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32F1xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc "../Core/Src/stm32f1xx_hal_msp.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32F103xB -c -I../Core/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32F1xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -MMD -MP -MF"Core/Src/stm32f1xx_hal_msp.d" -MT"Core/Src/stm32f1xx_hal_msp.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/stm32f1xx_hal_msp.o"
+arm-none-eabi-gcc "../Core/Src/stm32f1xx_it.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32F103xB -c -I../Core/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32F1xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -MMD -MP -MF"Core/Src/stm32f1xx_it.d" -MT"Core/Src/stm32f1xx_it.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/stm32f1xx_it.o"
 ../Core/Src/main.c: In function 'bootloader_handle_getrdp_cmd':
-../Core/Src/main.c:467:36: warning: passing argument 1 of 'bootloader_uart_write_data' makes pointer from integer without a cast [-Wint-conversion]
-  467 |         bootloader_uart_write_data(RDP_value, 2);
+../Core/Src/main.c:471:36: warning: passing argument 1 of 'bootloader_uart_write_data' makes pointer from integer without a cast [-Wint-conversion]
+  471 |         bootloader_uart_write_data(RDP_value, 2);
       |                                    ^~~~~~~~~
       |                                    |
       |                                    uint16_t {aka short unsigned int}
@@ -12,31 +14,36 @@ In file included from ../Core/Src/main.c:21:
    69 | void bootloader_uart_write_data(uint8_t *pBuffer,uint32_t len);
       |                                 ~~~~~~~~~^~~~~~~
 ../Core/Src/main.c: In function 'bootloader_handle_go_cmd':
-../Core/Src/main.c:480:21: warning: initialization of 'int' from 'uint32_t *' {aka 'long unsigned int *'} makes integer from pointer without a cast [-Wint-conversion]
-  480 |   int goToAddress = (uint32_t*)&pBuffer[2]; // get all 4 bytes
-      |                     ^
-In file included from ../Core/Src/main.c:21:
-../Core/Inc/main.h:135:22: warning: passing argument 2 of 'HAL_UART_Transmit' makes pointer from integer without a cast [-Wint-conversion]
-  135 | #define ADDR_INVALID 0x01
-      |                      ^~~~
-      |                      |
-      |                      int
-../Core/Src/main.c:492:31: note: in expansion of macro 'ADDR_INVALID'
-  492 |    HAL_UART_Transmit(&huart2, ADDR_INVALID, 1, HAL_MAX_DELAY);
-      |                               ^~~~~~~~~~~~
+../Core/Src/main.c:490:31: warning: passing argument 2 of 'HAL_UART_Transmit' makes pointer from integer without a cast [-Wint-conversion]
+  490 |    HAL_UART_Transmit(&huart2, addr_status, 1, HAL_MAX_DELAY);
+      |                               ^~~~~~~~~~~
+      |                               |
+      |                               uint8_t {aka unsigned char}
 In file included from ../Core/Inc/stm32f1xx_hal_conf.h:337,
                  from ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal.h:29,
                  from ../Core/Inc/main.h:31,
                  from ../Core/Src/main.c:21:
-../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h:749:79: note: expected 'const uint8_t *' {aka 'const unsigned char *'} but argument is of type 'int'
+../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h:749:79: note: expected 'const uint8_t *' {aka 'const unsigned char *'} but argument is of type 'uint8_t' {aka 'unsigned char'}
+  749 | HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *huart, const uint8_t *pData, uint16_t Size, uint32_t Timeout);
+      |                                                                ~~~~~~~~~~~~~~~^~~~~
+../Core/Src/main.c:502:31: warning: passing argument 2 of 'HAL_UART_Transmit' makes pointer from integer without a cast [-Wint-conversion]
+  502 |    HAL_UART_Transmit(&huart2, addr_status, 1, HAL_MAX_DELAY);
+      |                               ^~~~~~~~~~~
+      |                               |
+      |                               uint8_t {aka unsigned char}
+In file included from ../Core/Inc/stm32f1xx_hal_conf.h:337,
+                 from ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal.h:29,
+                 from ../Core/Inc/main.h:31,
+                 from ../Core/Src/main.c:21:
+../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h:749:79: note: expected 'const uint8_t *' {aka 'const unsigned char *'} but argument is of type 'uint8_t' {aka 'unsigned char'}
   749 | HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *huart, const uint8_t *pData, uint16_t Size, uint32_t Timeout);
       |                                                                ~~~~~~~~~~~~~~~^~~~~
 At top level:
-../Core/Src/main.c:325:13: warning: 'MX_USART3_UART_Init' defined but not used [-Wunused-function]
-  325 | static void MX_USART3_UART_Init(void)
+../Core/Src/main.c:328:13: warning: 'MX_USART3_UART_Init' defined but not used [-Wunused-function]
+  328 | static void MX_USART3_UART_Init(void)
       |             ^~~~~~~~~~~~~~~~~~~
-../Core/Src/main.c:259:13: warning: 'MX_USART1_UART_Init' defined but not used [-Wunused-function]
-  259 | static void MX_USART1_UART_Init(void)
+../Core/Src/main.c:262:13: warning: 'MX_USART1_UART_Init' defined but not used [-Wunused-function]
+  262 | static void MX_USART1_UART_Init(void)
       |             ^~~~~~~~~~~~~~~~~~~
 arm-none-eabi-gcc -o "CustomBootloaderSTM32F103RB.elf" @"objects.list"   -mcpu=cortex-m3 -T"C:\Users\ASUS\Desktop\Custom-bootloader-STM32F103RB\CustomBootloaderSTM32F103RB\STM32F103RBTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="CustomBootloaderSTM32F103RB.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 Finished building target: CustomBootloaderSTM32F103RB.elf
@@ -46,7 +53,7 @@ arm-none-eabi-objdump -h -S  CustomBootloaderSTM32F103RB.elf  > "CustomBootloade
 arm-none-eabi-objcopy  -O ihex  CustomBootloaderSTM32F103RB.elf  "CustomBootloaderSTM32F103RB.hex"
 arm-none-eabi-objcopy  -O binary  CustomBootloaderSTM32F103RB.elf  "CustomBootloaderSTM32F103RB.bin"
    text	   data	    bss	    dec	    hex	filename
-   8048	     32	   1992	  10072	   2758	CustomBootloaderSTM32F103RB.elf
+   8328	     32	   1992	  10352	   2870	CustomBootloaderSTM32F103RB.elf
 Finished building: default.size.stdout
  
 Finished building: CustomBootloaderSTM32F103RB.hex
@@ -56,5 +63,5 @@ Finished building: CustomBootloaderSTM32F103RB.bin
 Finished building: CustomBootloaderSTM32F103RB.list
  
 
-14:03:40 Build Finished. 0 errors, 5 warnings. (took 738ms)
+17:13:58 Build Finished. 0 errors, 5 warnings. (took 873ms)
 

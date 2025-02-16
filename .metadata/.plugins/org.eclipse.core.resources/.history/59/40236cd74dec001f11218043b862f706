@@ -486,8 +486,7 @@ void bootloader_handle_go_cmd(uint8_t *pBuffer){
 
 		uint32_t goToAddress = *(uint32_t*)&pBuffer[2]; // get all 4 bytes
 		if(verify_address(goToAddress) == ADDR_VALID){
-			uint8_t addr_status = ADDR_VALID;
-			HAL_UART_Transmit(&huart2, addr_status, 1, HAL_MAX_DELAY);
+			HAL_UART_Transmit(&huart2, ADDR_VALID, 1, HAL_MAX_DELAY);
 
             __disable_irq();
 
@@ -498,16 +497,13 @@ void bootloader_handle_go_cmd(uint8_t *pBuffer){
             Jump_To_APP();
 		}
 		else{
-			uint8_t addr_status = ADDR_INVALID;
-			HAL_UART_Transmit(&huart2, addr_status, 1, HAL_MAX_DELAY);
+			HAL_UART_Transmit(&huart2, ADDR_INVALID, 1, HAL_MAX_DELAY);
 		}
 	}
 	else{
 		bootloader_send_nack();
 	}
 }
-
-
 void bootloader_handle_flash_erase_cmd(uint8_t *pBuffer);
 void bootloader_handle_mem_write_cmd(uint8_t *pBuffer);
 void bootloader_handle_en_rw_protect(uint8_t *pBuffer);
