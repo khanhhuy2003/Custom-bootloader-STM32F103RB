@@ -6,16 +6,16 @@
 		<item key="org.eclipse.ui.internal.quickaccess.QuickAccessDialogDIALOG_USE_PERSISTED_SIZE" value="true"/>
 		<item key="org.eclipse.ui.internal.quickaccess.QuickAccessDialogDIALOG_USE_PERSISTED_LOCATION" value="false"/>
 		<list key="orderedElements">
-			<item value="org.eclipse.ui.window.preferences(preferencePageId=org.eclipse.cdt.make.ui.preferences.MakePreferencePage)"/>
+			<item value="org.eclipse.equinox.security.ui.storage"/>
 		</list>
 		<list key="orderedProviders">
-			<item value="org.eclipse.ui.commands"/>
+			<item value="org.eclipse.ui.preferences"/>
 		</list>
 		<list key="textEntries">
 			<item value="1"/>
 		</list>
 		<list key="textArray">
-			<item value="target"/>
+			<item value="sec"/>
 		</list>
 	</section>
 </section>

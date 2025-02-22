@@ -46,12 +46,12 @@ mem_write_active =0
 #----------------------------- file ops----------------------------------------
 
 def calc_file_len():
-    size = os.path.getsize("user_app.bin")
+    size = os.path.getsize("UserApplication.bin")
     return size
 
 def open_the_file():
     global bin_file
-    bin_file = open('user_app.bin','rb')
+    bin_file = open('UserApplication.bin','rb')
     #read = bin_file.read()
     #global file_contents = bytearray(read)
 
@@ -114,7 +114,7 @@ def serial_ports():
 def Serial_Port_Configuration(port):
     global ser
     try:
-        ser = serial.Serial(port,115200,timeout=5)
+        ser = serial.Serial(port,115200,timeout=2)
     except:
         print("\n   Oops! That was not a valid port")
         
@@ -162,8 +162,6 @@ def process_COMMAND_BL_GET_VER(length):
     ver=read_serial_port(1)
     value = bytearray(ver)
     print("\n   Bootloader Ver. : ",hex(value[0]))
-
-
 
 def process_COMMAND_BL_GET_HELP(length):
     #print("reading:", length)
@@ -230,7 +228,24 @@ def process_COMMAND_BL_MEM_WRITE(length):
     
 
 def process_COMMAND_BL_FLASH_MASS_ERASE(length):
-    pass
+    erase_status=0
+    value = read_serial_port(length)
+    if len(value):
+        erase_status = bytearray(value)
+        if(erase_status[0] == Flash_HAL_OK):
+            print("\n   Erase Status: Success  Code: FLASH_HAL_OK")
+        elif(erase_status[0] == Flash_HAL_ERROR):
+            print("\n   Erase Status: Fail  Code: FLASH_HAL_ERROR")
+        elif(erase_status[0] == Flash_HAL_BUSY):
+            print("\n   Erase Status: Fail  Code: FLASH_HAL_BUSY")
+        elif(erase_status[0] == Flash_HAL_TIMEOUT):
+            print("\n   Erase Status: Fail  Code: FLASH_HAL_TIMEOUT")
+        elif(erase_status[0] == Flash_HAL_INV_ADDR):
+            print("\n   Erase Status: Fail  Code: FLASH_HAL_INV_SECTOR")
+        else:
+            print("\n   Erase Status: Fail  Code: UNKNOWN_ERROR_CODE")
+    else:
+        print("Timeout: Bootloader is not responding")
 
 
 
@@ -404,7 +419,24 @@ def decode_menu_command_code(command):
         ret_value = read_bootloader_reply(data_buf[1])
         
     elif(command == 6):
-        print("\n   This command is not supported")
+        print("\n   Command == > BL_FLASH_MASS_ERASE")
+        data_buf[0] = COMMAND_BL_FLASH_ERASE_LEN-1 
+        data_buf[1] = COMMAND_BL_FLASH_ERASE 
+        data_buf[2]= 0xff 
+        data_buf[3]= 0
+            
+        crc32       = get_crc(data_buf,COMMAND_BL_FLASH_ERASE_LEN-4) 
+        data_buf[4] = word_to_byte(crc32,1,1) 
+        data_buf[5] = word_to_byte(crc32,2,1) 
+        data_buf[6] = word_to_byte(crc32,3,1) 
+        data_buf[7] = word_to_byte(crc32,4,1) 
+
+        Write_to_serial_port(data_buf[0],1)
+        
+        for i in data_buf[1:COMMAND_BL_FLASH_ERASE_LEN]:
+            Write_to_serial_port(i,COMMAND_BL_FLASH_ERASE_LEN-1)
+        
+        ret_value = read_bootloader_reply(data_buf[1])
     elif(command == 7):
         print("\n   Command == > BL_FLASH_ERASE")
         data_buf[0] = COMMAND_BL_FLASH_ERASE_LEN-1 
@@ -413,10 +445,12 @@ def decode_menu_command_code(command):
         sector_num = int(sector_num, 16)
         if(sector_num != 0xff):
             nsec=int(input("\n   Enter number of sectors to erase(max 8) here :"))
-        
-        data_buf[2]= sector_num 
-        data_buf[3]= nsec 
-
+            data_buf[2]= sector_num 
+            data_buf[3]= nsec
+        else:
+            data_buf[2]= 0xff 
+            data_buf[3]= 0
+            
         crc32       = get_crc(data_buf,COMMAND_BL_FLASH_ERASE_LEN-4) 
         data_buf[4] = word_to_byte(crc32,1,1) 
         data_buf[5] = word_to_byte(crc32,2,1) 
@@ -690,7 +724,7 @@ if(ret < 0):
 while True:
     print("\n +==========================================+")
     print(" |               Menu                       |")
-    print(" |         STM32F4 BootLoader v1            |")
+    print(" |         STM32F1xx03 BootLoader v1        |")
     print(" +==========================================+")
 
   
@@ -706,10 +740,9 @@ while True:
     print("   BL_MEM_WRITE                          --> 8")
     print("   BL_EN_R_W_PROTECT                     --> 9")
     print("   BL_MEM_READ                           --> 10")
-    print("   BL_READ_SECTOR_P_STATUS               --> 11")
+    print("   BL_READ_PAGES_P_STATUS               --> 11")
     print("   BL_OTP_READ                           --> 12")
     print("   BL_DIS_R_W_PROTECT                    --> 13")
-    print("   BL_MY_NEW_COMMAND                     --> 14")
     print("   MENU_EXIT                             --> 0")
 
     #command_code = int(input("\n   Type the command code here :") )

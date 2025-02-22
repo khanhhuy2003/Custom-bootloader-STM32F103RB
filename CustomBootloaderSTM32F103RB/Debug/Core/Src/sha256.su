@@ -1,0 +1,4 @@
+sha256.c:35:6:sha256_transform	320	static
+sha256.c:76:6:sha256_init	16	static
+sha256.c:90:6:sha256_update	40	static
+sha256.c:105:6:sha256_final	32	static

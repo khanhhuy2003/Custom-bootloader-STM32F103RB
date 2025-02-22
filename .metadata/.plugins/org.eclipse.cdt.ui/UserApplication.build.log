@@ -1,10 +1,23 @@
-21:34:16 **** Incremental Build of configuration Debug for project UserApplication ****
+16:42:56 **** Incremental Build of configuration Debug for project UserApplication ****
 make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32F103xB -c -I../Core/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32F1xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "UserApplication.elf" @"objects.list"   -mcpu=cortex-m3 -T"C:\Users\ASUS\Desktop\Custom-bootloader-STM32F103RB\UserApplication\STM32F103RBTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="UserApplication.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: UserApplication.elf
+ 
 arm-none-eabi-size   UserApplication.elf 
+arm-none-eabi-objdump -h -S  UserApplication.elf  > "UserApplication.list"
+arm-none-eabi-objcopy  -O ihex  UserApplication.elf  "UserApplication.hex"
    text	   data	    bss	    dec	    hex	filename
-   3520	     20	   1572	   5112	   13f8	UserApplication.elf
+   5936	     20	   1644	   7600	   1db0	UserApplication.elf
+arm-none-eabi-objcopy  -O binary  UserApplication.elf  "UserApplication.bin"
 Finished building: default.size.stdout
  
+Finished building: UserApplication.hex
+Finished building: UserApplication.bin
+ 
+ 
+Finished building: UserApplication.list
+ 
 
-21:34:16 Build Finished. 0 errors, 0 warnings. (took 255ms)
+16:42:57 Build Finished. 0 errors, 0 warnings. (took 727ms)
 

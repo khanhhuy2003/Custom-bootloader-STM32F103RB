@@ -24,7 +24,9 @@
 /* USER CODE BEGIN Includes */
 #include "string.h"
 #include "stdarg.h"
+
 #define USER_APP_ADDRESS  0x8004000
+uint8_t Mem_u8FlashWrite(uint8_t *dBuffer, uint32_t Cpy_u32MemAddr,uint32_t Cpy_u32Len);
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -77,10 +79,6 @@ void printmsg(const char *msg) {
 
 void bootloader_uart_read_data(){
       // Allocates at runtime
-//    if (!bl_rx_buffer) {
-//        send_uart_message("Memory allocation failed!\r\n");
-//        return;
-//    }
 	uint8_t rcv_len = 0;
 	while(1){
 		memset(bl_rx_buffer, 0, 200);
@@ -102,6 +100,12 @@ void bootloader_uart_read_data(){
 			break;
 		case BL_GO_TO_ADDR:
 			bootloader_handle_go_cmd(bl_rx_buffer);
+			break;
+		case BL_FLASH_ERASE:
+			bootloader_handle_flash_erase_cmd(bl_rx_buffer);
+			break;
+		case BL_MEM_WRITE:
+			bootloader_handle_mem_write_cmd(bl_rx_buffer);
 			break;
 		}
 
@@ -172,7 +176,7 @@ int main(void)
   //HAL_GPIO_EXTI_Callback(GPIO_PIN_13);
   /* USER CODE END 2 */
   if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_RESET){
-	  //printmsg("Enter bootloader mode\n");
+	  printmsg("Enter bootloader mode\n");
 	  bootloader_uart_read_data();
   }else{
 	  printmsg("Jump to user application\n");
@@ -476,40 +480,120 @@ void bootloader_handle_getrdp_cmd(uint8_t *pBuffer){
         bootloader_send_nack();
     }
 }
-void bootloader_handle_go_cmd(uint8_t *pBuffer){
-	uint32_t command_packet_len = bl_rx_buffer[0] + 1;
-	uint32_t host_crc = *((uint32_t*)(bl_rx_buffer + command_packet_len - 4));
+//void bootloader_handle_go_cmd(uint8_t *pBuffer){
+//	uint32_t command_packet_len = bl_rx_buffer[0] + 1;
+//	uint32_t host_crc = *((uint32_t*)(bl_rx_buffer + command_packet_len - 4));
+//
+//	if (!bootloader_verify_crc(&bl_rx_buffer[0], command_packet_len - 4, host_crc)){
+//
+//		bootloader_send_ack(pBuffer[0], 1);
+//
+//		uint32_t goToAddress = *(uint32_t*)&pBuffer[2]; // get all 4 bytes
+//		if(verify_address(goToAddress) == ADDR_VALID){
+//			uint8_t addr_status = ADDR_VALID;
+//			HAL_UART_Transmit(&huart2, &addr_status, 1, HAL_MAX_DELAY);
+//
+//            __disable_irq();
+//
+//            // Set MSP
+//            __set_MSP(*(uint32_t*)goToAddress);
+//
+//            void (*Jump_To_APP)(void) = (void (*)(void))(*(volatile uint32_t*)(goToAddress + 4));
+//            Jump_To_APP();
+//		}
+//		else{
+//			uint8_t addr_status = ADDR_INVALID;
+//			HAL_UART_Transmit(&huart2, (uint8_t*)addr_status, 1, HAL_MAX_DELAY);
+//		}
+//	}
+//	else{
+//		bootloader_send_nack();
+//	}
+//}
+void bootloader_handle_go_cmd(uint8_t *pBuffer) {
+    uint32_t command_packet_len = bl_rx_buffer[0] + 1;
+    uint32_t host_crc = *((uint32_t*)(bl_rx_buffer + command_packet_len - 4));
 
-	if (!bootloader_verify_crc(&bl_rx_buffer[0], command_packet_len - 4, host_crc)){
+    if (!bootloader_verify_crc(&bl_rx_buffer[0], command_packet_len - 4, host_crc)) {
+        bootloader_send_ack(pBuffer[0], 1);
 
-		bootloader_send_ack(pBuffer[0], 1);
+        uint32_t goToAddress = *(uint32_t*)&pBuffer[2]; // Extract jump address
 
-		uint32_t goToAddress = *(uint32_t*)&pBuffer[2]; // get all 4 bytes
-		if(verify_address(goToAddress) == ADDR_VALID){
-			uint8_t addr_status = ADDR_VALID;
-			HAL_UART_Transmit(&huart2, addr_status, 1, HAL_MAX_DELAY);
+        if (verify_address(goToAddress) == ADDR_VALID) {
+            uint8_t addr_status = ADDR_VALID;
+            HAL_UART_Transmit(&huart2, &addr_status, 1, HAL_MAX_DELAY);
 
             __disable_irq();
 
-            // Set MSP
-            __set_MSP(*(uint32_t*)goToAddress);
+            uint32_t app_msp = *(volatile uint32_t*)goToAddress;  // Stack Pointer
+            uint32_t app_reset_handler = *(volatile uint32_t*)(goToAddress + 4);  // Reset Handler
 
-            void (*Jump_To_APP)(void) = (void (*)(void))(*(volatile uint32_t*)(goToAddress + 4));
-            Jump_To_APP();
-		}
-		else{
-			uint8_t addr_status = ADDR_INVALID;
-			HAL_UART_Transmit(&huart2, addr_status, 1, HAL_MAX_DELAY);
-		}
-	}
-	else{
-		bootloader_send_nack();
-	}
+            if (app_msp < 0x20000000 || app_msp > 0x2001FFFF) {
+                HAL_UART_Transmit(&huart2, (uint8_t*)"Invalid MSP\r\n", 15, HAL_MAX_DELAY);
+                return;
+            }
+
+            if (app_reset_handler < 0x08000000 || app_reset_handler > 0x08010000) {
+                HAL_UART_Transmit(&huart2, (uint8_t*)"Invalid reset handler\r\n", 25, HAL_MAX_DELAY);
+                return;
+            }
+            __set_MSP(app_msp);  // Set new stack pointer
+            SCB->VTOR = goToAddress;  // Set new vector table
+
+            // Function pointer to application reset handler
+            void (*Jump_To_APP)(void) = (void (*)(void))app_reset_handler;
+
+            Jump_To_APP();  // Jump to application
+        } else {
+            uint8_t addr_status = ADDR_INVALID;
+            HAL_UART_Transmit(&huart2, &addr_status, 1, HAL_MAX_DELAY);
+        }
+    } else {
+        bootloader_send_nack();
+    }
 }
+void bootloader_handle_flash_erase_cmd(uint8_t *pBuffer) {
+    uint32_t command_packet_len = pBuffer[0] + 1;
+    uint32_t host_crc = *((uint32_t *)(pBuffer + command_packet_len - 4));
+
+    if (!bootloader_verify_crc(pBuffer, command_packet_len - 4, host_crc)) {
+        uint8_t page_number = pBuffer[2];  // Start page number
+        uint8_t num_pages = pBuffer[3];    // Number of pages to erase
+
+        bootloader_send_ack(pBuffer[0], 1);  // Send ACK first
+        uint8_t erase_status = erase_flash_page(page_number, num_pages);
+        HAL_UART_Transmit(&huart2, &erase_status, 1, HAL_MAX_DELAY);
+    } else {
+        bootloader_send_nack();
+    }
+}
+void bootloader_handle_mem_write_cmd(uint8_t *pBuffer)
+{
+    uint8_t status = 0x00;
+    uint8_t Loc_u8Len = pBuffer[0];
+    uint8_t Loc_u8PayLoadLen = pBuffer[6];
+    uint32_t Loc_u32MemAddress = (*(uint32_t*)(&pBuffer[2]));
+
+    // Length of the full command packet
+    uint32_t Loc_u32CommandBacketLen = pBuffer[0] + 1;
+
+        bootloader_send_ack(pBuffer[0], 1);
+
+        if (verify_address(Loc_u32MemAddress) == ADDR_VALID)
+        {
+
+        	status = execute_mem_write(&pBuffer[7], Loc_u32MemAddress, Loc_u8PayLoadLen);
+            HAL_UART_Transmit(&huart2, (uint8_t*)&status, 1, HAL_MAX_DELAY);
+        }
+        else
+        {
+            ///printmsg("DBMSG: Invalid Address..\n");
+        	status = ADDR_INVALID;
+            HAL_UART_Transmit(&huart2, (uint8_t*)&status, 1, HAL_MAX_DELAY);
+        }
 
 
-void bootloader_handle_flash_erase_cmd(uint8_t *pBuffer);
-void bootloader_handle_mem_write_cmd(uint8_t *pBuffer);
+}
 void bootloader_handle_en_rw_protect(uint8_t *pBuffer);
 void bootloader_handle_mem_read (uint8_t *pBuffer);
 void bootloader_handle_read_sector_protection_status(uint8_t *pBuffer);
@@ -519,6 +603,30 @@ void bootloader_handle_dis_rw_protect(uint8_t *pBuffer);
 /*
  * Helper functions
  */
+uint8_t execute_mem_write(uint8_t *dBuffer, uint32_t Cpy_u32MemAddr, uint32_t Cpy_u32Len)
+{
+    uint8_t Loc_u8Status = HAL_OK;
+    HAL_FLASH_Unlock();
+
+    // Ensure memory address is aligned to 16-bit (half-word)
+    if (Cpy_u32MemAddr % 2 != 0) {
+        return HAL_ERROR;
+    }
+
+    for (uint32_t i = 0; i < Cpy_u32Len; i += 2) // Write 2 bytes at a time
+    {
+        uint16_t data = (dBuffer[i+1] << 8) | dBuffer[i];  // Combine 2 bytes
+        Loc_u8Status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, Cpy_u32MemAddr + i, data);
+
+        if (Loc_u8Status != HAL_OK) {
+            break; // Stop on error
+        }
+    }
+
+    HAL_FLASH_Lock();
+    return Loc_u8Status;
+}
+
 void bootloader_send_ack(uint8_t command_code, uint8_t follow_len)
 {
 	 //here we send 2 byte.. first byte is ack and the second byte is len value
@@ -590,8 +698,27 @@ uint8_t verify_address(uint32_t go_address){
 	return ADDR_INVALID;
 
 }
-uint8_t execute_flash_erase(uint8_t sector_number , uint8_t number_of_sector);
-uint8_t execute_mem_write(uint8_t *pBuffer, uint32_t mem_address, uint32_t len);
+uint8_t erase_flash_page(uint32_t page_number, uint32_t num_pages) {
+    FLASH_EraseInitTypeDef erase_init;
+    uint32_t page_error;
+
+    if ((page_number * FLASH_PAGE_SIZE) >= (USER_APP_ADDRESS - FLASH_BASE_ADDRESS)) {
+        HAL_FLASH_Unlock();  // Unlock flash memory for writing
+
+        erase_init.TypeErase = FLASH_TYPEERASE_PAGES;
+        erase_init.PageAddress = FLASH_BASE_ADDRESS + (page_number * FLASH_PAGE_SIZE);
+        erase_init.NbPages = num_pages;
+
+        if (HAL_FLASHEx_Erase(&erase_init, &page_error) == HAL_OK) {
+            HAL_FLASH_Lock();  // Lock flash after operation
+            return FLASH_SUCCESS;
+        } else {
+            HAL_FLASH_Lock();
+            return FLASH_ERROR;
+        }
+    }
+    return FLASH_INVALID_ADDR;
+}
 
 uint8_t configure_flash_sector_rw_protection(uint8_t sector_details, uint8_t protection_mode, uint8_t disable);
 

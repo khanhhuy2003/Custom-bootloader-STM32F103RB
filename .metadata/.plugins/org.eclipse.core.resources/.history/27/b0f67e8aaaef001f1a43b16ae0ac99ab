@@ -1,0 +1,762 @@
+/* USER CODE BEGIN Header */
+/**
+  ******************************************************************************
+  * @file           : main.c
+  * @brief          : Main program body
+  ******************************************************************************
+  * @attention
+  *
+  * <h2><center>&copy; Copyright (c) 2025 STMicroelectronics.
+  * All rights reserved.</center></h2>
+  *
+  * This software component is licensed by ST under BSD 3-Clause license,
+  * the "License"; You may not use this file except in compliance with the
+  * License. You may obtain a copy of the License at:
+  *                        opensource.org/licenses/BSD-3-Clause
+  *
+  ******************************************************************************
+  */
+/* USER CODE END Header */
+/* Includes ------------------------------------------------------------------*/
+#include "main.h"
+
+/* Private includes ----------------------------------------------------------*/
+/* USER CODE BEGIN Includes */
+#include "string.h"
+#include "stdarg.h"
+
+#define USER_APP_ADDRESS  0x8004000
+uint8_t Mem_u8FlashWrite(uint8_t *dBuffer, uint32_t Cpy_u32MemAddr,uint32_t Cpy_u32Len);
+/* USER CODE END Includes */
+
+/* Private typedef -----------------------------------------------------------*/
+/* USER CODE BEGIN PTD */
+
+/* USER CODE END PTD */
+
+/* Private define ------------------------------------------------------------*/
+/* USER CODE BEGIN PD */
+/* USER CODE END PD */
+
+/* Private macro -------------------------------------------------------------*/
+/* USER CODE BEGIN PM */
+
+/* USER CODE END PM */
+
+/* Private variables ---------------------------------------------------------*/
+CRC_HandleTypeDef hcrc;
+
+UART_HandleTypeDef huart1;
+UART_HandleTypeDef huart2;
+UART_HandleTypeDef huart3;
+
+/* USER CODE BEGIN PV */
+#define BL_RX_LEN  200
+uint8_t bl_rx_buffer[BL_RX_LEN];
+/* USER CODE END PV */
+
+/* Private function prototypes -----------------------------------------------*/
+void SystemClock_Config(void);
+static void MX_GPIO_Init(void);
+static void MX_USART1_UART_Init(void);
+static void MX_USART2_UART_Init(void);
+static void MX_USART3_UART_Init(void);
+static void MX_CRC_Init(void);
+/* USER CODE BEGIN PFP */
+
+/* USER CODE END PFP */
+
+/* Private user code ---------------------------------------------------------*/
+/* USER CODE BEGIN 0 */
+uint8_t help_command[] = {BL_GET_VER , BL_GET_HELP, BL_GET_CID, BL_GET_RDP_STATUS, BL_GO_TO_ADDR, BL_FLASH_ERASE, BL_MEM_WRITE,
+		                 BL_EN_RW_PROTECT,BL_MEM_READ, BL_READ_SECTOR_P_STATUS, BL_OTP_READ, BL_DIS_R_W_PROTECT};
+void send_uart_message(char *message) {
+    HAL_UART_Transmit(&huart2, (uint8_t*)message, strlen(message), HAL_MAX_DELAY);
+}
+void printmsg(const char *msg) {
+    HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
+}
+
+void bootloader_uart_read_data(){
+      // Allocates at runtime
+	uint8_t rcv_len = 0;
+	while(1){
+		memset(bl_rx_buffer, 0, 200);
+		HAL_UART_Receive(&huart2, bl_rx_buffer, 1, HAL_MAX_DELAY);
+		rcv_len = bl_rx_buffer[0]; // extract the first byte as the length of message
+		HAL_UART_Receive(&huart2, &bl_rx_buffer[1], rcv_len, HAL_MAX_DELAY); // then read the remaining of the command
+		switch(bl_rx_buffer[1]){ //the second byte here is the command code,
+		case BL_GET_VER:
+			bootloader_handle_getver_cmd(bl_rx_buffer);
+			break;
+		case BL_GET_HELP:
+			bootloader_handle_gethelp_cmd(bl_rx_buffer);
+			break;
+		case BL_GET_CID:
+			bootloader_handle_getcid_cmd(bl_rx_buffer);
+			break;
+		case BL_GET_RDP_STATUS:
+			bootloader_handle_getrdp_cmd(bl_rx_buffer);
+			break;
+		case BL_GO_TO_ADDR:
+			bootloader_handle_go_cmd(bl_rx_buffer);
+			break;
+		case BL_FLASH_ERASE:
+			bootloader_handle_flash_erase_cmd(bl_rx_buffer);
+			break;
+		case BL_MEM_WRITE:
+			bootloader_handle_mem_write_cmd(bl_rx_buffer);
+			break;
+		}
+
+	}
+
+}
+void bootloader_jump_to_user_app(void) {
+    __disable_irq();  // Disable all interrupts
+
+    uint32_t user_app_stack_pointer = *((volatile uint32_t*) USER_APP_ADDRESS);
+    uint32_t user_app_reset_address = *((volatile uint32_t*) (USER_APP_ADDRESS + 4));
+
+    if (user_app_reset_address == 0xFFFFFFFF || user_app_stack_pointer == 0xFFFFFFFF) {
+        send_uart_message("No valid application found. Staying in bootloader...\r\n");
+        return;
+    }
+
+    send_uart_message("Jumping to User Application...\r\n");
+
+    __set_MSP(user_app_stack_pointer);  // Set Main Stack Pointer
+
+    SCB->VTOR = USER_APP_ADDRESS;  // Set Vector Table Offset for User App
+
+    __DSB();  // Ensure all memory operations complete
+    __ISB();  // Flush instruction pipeline
+
+    void (*user_app_reset_handler)(void) = (void (*)(void)) user_app_reset_address;
+    user_app_reset_handler();  // Jump to user application
+}
+
+
+
+/* USER CODE END 0 */
+
+/**
+  * @brief  The application entry point.
+  * @retval int
+  */
+int main(void)
+{
+  /* USER CODE BEGIN 1 */
+
+  /* USER CODE END 1 */
+
+  /* MCU Configuration--------------------------------------------------------*/
+
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
+
+  /* USER CODE BEGIN Init */
+
+  /* USER CODE END Init */
+
+  /* Configure the system clock */
+  SystemClock_Config();
+
+  /* USER CODE BEGIN SysInit */
+
+  /* USER CODE END SysInit */
+
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  //MX_USART1_UART_Init();
+  MX_USART2_UART_Init();
+  //MX_USART3_UART_Init();
+  MX_CRC_Init();
+  /* USER CODE BEGIN 2 */
+  //HAL_GPIO_EXTI_Callback(GPIO_PIN_13);
+  /* USER CODE END 2 */
+  if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_RESET){
+	  printmsg("Enter bootloader mode\n");
+	  bootloader_uart_read_data();
+  }else{
+	  printmsg("Jump to user application\n");
+	  bootloader_jump_to_user_app();
+
+  }
+
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
+  while (1)
+  {
+    /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
+
+
+  }
+  /* USER CODE END 3 */
+}
+
+/**
+  * @brief System Clock Configuration
+  * @retval None
+  */
+void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Initializes the CPU, AHB and APB buses clocks
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+
+/**
+  * @brief CRC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_CRC_Init(void)
+{
+
+  /* USER CODE BEGIN CRC_Init 0 */
+
+  /* USER CODE END CRC_Init 0 */
+
+  /* USER CODE BEGIN CRC_Init 1 */
+
+  /* USER CODE END CRC_Init 1 */
+  hcrc.Instance = CRC;
+  if (HAL_CRC_Init(&hcrc) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN CRC_Init 2 */
+
+  /* USER CODE END CRC_Init 2 */
+
+}
+
+/**
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART1_Init 0 */
+
+  /* USER CODE END USART1_Init 0 */
+
+  /* USER CODE BEGIN USART1_Init 1 */
+
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 115200;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
+
+  /* USER CODE END USART1_Init 2 */
+
+}
+
+/**
+  * @brief USART2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART2_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART2_Init 0 */
+
+  /* USER CODE END USART2_Init 0 */
+
+  /* USER CODE BEGIN USART2_Init 1 */
+
+  /* USER CODE END USART2_Init 1 */
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 115200;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART2_Init 2 */
+
+  /* USER CODE END USART2_Init 2 */
+
+}
+
+/**
+  * @brief USART3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART3_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART3_Init 0 */
+
+  /* USER CODE END USART3_Init 0 */
+
+  /* USER CODE BEGIN USART3_Init 1 */
+
+  /* USER CODE END USART3_Init 1 */
+  huart3.Instance = USART3;
+  huart3.Init.BaudRate = 115200;
+  huart3.Init.WordLength = UART_WORDLENGTH_8B;
+  huart3.Init.StopBits = UART_STOPBITS_1;
+  huart3.Init.Parity = UART_PARITY_NONE;
+  huart3.Init.Mode = UART_MODE_TX_RX;
+  huart3.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart3.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART3_Init 2 */
+
+  /* USER CODE END USART3_Init 2 */
+
+}
+
+/**
+  * @brief GPIO Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_GPIO_Init(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+  /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : PC13 */
+  GPIO_InitStruct.Pin = GPIO_PIN_13;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PA0 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PA5 */
+  GPIO_InitStruct.Pin = GPIO_PIN_5;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+}
+
+/* USER CODE BEGIN 4 */
+void  bootloader_uart_read_data(void);
+void bootloader_jump_to_user_app(void);
+
+void bootloader_handle_getver_cmd(uint8_t *bl_rx_buffer)
+{
+    uint8_t bl_version;
+
+    //printmsg("BL_DEBUG_MSG:bootloader_handle_getver_cmd\n");
+
+    uint32_t command_packet_len = bl_rx_buffer[0] + 1;
+    uint32_t host_crc = *((uint32_t *)(bl_rx_buffer + command_packet_len - 4));
+
+    if (!bootloader_verify_crc(&bl_rx_buffer[0], command_packet_len - 4, host_crc))
+    {
+        //printmsg("BL_DEBUG_MSG:checksum success !!\n");
+
+        // Send ACK first
+        bootloader_send_ack(bl_rx_buffer[0], 1);
+
+        // Retrieve bootloader version
+        bl_version = get_bootloader_version();
+        // Send the version
+        bootloader_uart_write_data(&bl_version, 1);
+    }
+    else
+    {
+        //printmsg("BL_DEBUG_MSG:checksum fail !!\n");
+        bootloader_send_nack();
+    }
+}
+
+void bootloader_handle_gethelp_cmd(uint8_t *pBuffer){
+    uint32_t command_packet_len = bl_rx_buffer[0] + 1;
+    uint32_t host_crc = *((uint32_t *)(bl_rx_buffer + command_packet_len - 4));
+
+    if (!bootloader_verify_crc(&bl_rx_buffer[0], command_packet_len - 4, host_crc))
+    {
+        // Send ACK first
+        bootloader_send_ack(pBuffer[0], sizeof(help_command));
+        // Send the version
+        bootloader_uart_write_data(help_command, sizeof(help_command));
+    }
+    else
+    {
+        //printmsg("BL_DEBUG_MSG:checksum fail !!\n");
+        bootloader_send_nack();
+    }
+}
+void bootloader_handle_getcid_cmd(uint8_t *pBuffer){
+    uint32_t command_packet_len = bl_rx_buffer[0] + 1;
+    uint32_t host_crc = *((uint32_t *)(bl_rx_buffer + command_packet_len - 4));
+    uint16_t cid = get_mcu_chip_id();
+    if (!bootloader_verify_crc(&bl_rx_buffer[0], command_packet_len - 4, host_crc))
+    {
+        // Send ACK first
+        bootloader_send_ack(pBuffer[0], 2);
+        // Send the version
+        bootloader_uart_write_data((uint8_t*)&cid, 2);
+    }
+    else
+    {
+        //printmsg("BL_DEBUG_MSG:checksum fail !!\n");
+        bootloader_send_nack();
+    }
+}
+void bootloader_handle_getrdp_cmd(uint8_t *pBuffer){
+
+    uint32_t command_packet_len = bl_rx_buffer[0] + 1;
+    uint32_t host_crc = *((uint32_t *)(bl_rx_buffer + command_packet_len - 4));
+    uint16_t RDP_value = get_flash_rdp_level();
+    if (!bootloader_verify_crc(&bl_rx_buffer[0], command_packet_len - 4, host_crc))
+    {
+        // Send ACK first
+    	//printmsg("BL_DEBUG_MSG:checksum success !!\n");
+        bootloader_send_ack(pBuffer[0], 2);
+        // Send the version
+        bootloader_uart_write_data(RDP_value, 2);
+    }
+    else
+    {
+        //printmsg("BL_DEBUG_MSG:checksum fail !!\n");
+        bootloader_send_nack();
+    }
+}
+void bootloader_handle_go_cmd(uint8_t *pBuffer){
+	uint32_t command_packet_len = bl_rx_buffer[0] + 1;
+	uint32_t host_crc = *((uint32_t*)(bl_rx_buffer + command_packet_len - 4));
+
+	if (!bootloader_verify_crc(&bl_rx_buffer[0], command_packet_len - 4, host_crc)){
+
+		bootloader_send_ack(pBuffer[0], 1);
+
+		uint32_t goToAddress = *(uint32_t*)&pBuffer[2]; // get all 4 bytes
+		if(verify_address(goToAddress) == ADDR_VALID){
+			uint8_t addr_status = ADDR_VALID;
+			HAL_UART_Transmit(&huart2, addr_status, 1, HAL_MAX_DELAY);
+
+            __disable_irq();
+
+            // Set MSP
+            __set_MSP(*(uint32_t*)goToAddress);
+
+            void (*Jump_To_APP)(void) = (void (*)(void))(*(volatile uint32_t*)(goToAddress + 4));
+            Jump_To_APP();
+		}
+		else{
+			uint8_t addr_status = ADDR_INVALID;
+			HAL_UART_Transmit(&huart2, addr_status, 1, HAL_MAX_DELAY);
+		}
+	}
+	else{
+		bootloader_send_nack();
+	}
+}
+
+
+void bootloader_handle_flash_erase_cmd(uint8_t *pBuffer) {
+    uint32_t command_packet_len = pBuffer[0] + 1;
+    uint32_t host_crc = *((uint32_t *)(pBuffer + command_packet_len - 4));
+
+    if (!bootloader_verify_crc(pBuffer, command_packet_len - 4, host_crc)) {
+        uint8_t page_number = pBuffer[2];  // Start page number
+        uint8_t num_pages = pBuffer[3];    // Number of pages to erase
+
+        bootloader_send_ack(pBuffer[0], 1);  // Send ACK first
+        uint8_t erase_status = erase_flash_page(page_number, num_pages);
+        HAL_UART_Transmit(&huart2, &erase_status, 1, HAL_MAX_DELAY);
+    } else {
+        bootloader_send_nack();
+    }
+}
+void bootloader_handle_mem_write_cmd(uint8_t *pBuffer)
+{
+    uint8_t Loc_u8WriteStatus = 0x00;
+    uint8_t Loc_u8Len = pBuffer[0];
+    uint8_t Loc_u8PayLoadLen = pBuffer[6];
+    uint32_t Loc_u32MemAddress = (*(uint32_t*)(&pBuffer[2]));
+
+    // Length of the full command packet
+    uint32_t Loc_u32CommandBacketLen = pBuffer[0] + 1;
+
+    // Extract the CRC sent by the host
+    uint32_t Loc_u32HostCRC = *(uint32_t*)(pBuffer + Loc_u32CommandBacketLen - 4);
+    HAL_UART_Transmit(&huart2, (uint8_t*)&Loc_u32HostCRC, 1, HAL_MAX_DELAY);
+    //printmsg("DBMSG: Bootloader handling Mem Write command\n");
+
+    if (!bootloader_verify_crc(&pBuffer[0], Loc_u32CommandBacketLen - 4, Loc_u32HostCRC))
+    {
+        //printmsg("DBMSG: Checksum success..\n");
+        bootloader_send_ack(pBuffer[0], 1);
+
+        if (verify_address(Loc_u32MemAddress) == ADDR_VALID)
+        {
+            //printmsg("DBMSG: Memory address valid...\n");
+            //HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET);
+
+            // Corrected function call (aligned write)
+            Loc_u8WriteStatus = Mem_u8FlashWrite(&pBuffer[7], Loc_u32MemAddress, Loc_u8PayLoadLen);
+
+            //HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_RESET);
+
+            // Send Write Status
+            HAL_UART_Transmit(&huart2, (uint8_t*)&Loc_u8WriteStatus, 1, HAL_MAX_DELAY);
+        }
+        else
+        {
+            ///printmsg("DBMSG: Invalid Address..\n");
+            Loc_u8WriteStatus = ADDR_INVALID;
+            HAL_UART_Transmit(&huart2, (uint8_t*)&Loc_u8WriteStatus, 1, HAL_MAX_DELAY);
+        }
+    }
+    else
+    {
+        printmsg("DBMSG: Checksum fail..\n");
+        bootloader_send_nack();
+    }
+}
+
+
+
+void bootloader_handle_en_rw_protect(uint8_t *pBuffer);
+void bootloader_handle_mem_read (uint8_t *pBuffer);
+void bootloader_handle_read_sector_protection_status(uint8_t *pBuffer);
+void bootloader_handle_read_otp(uint8_t *pBuffer);
+void bootloader_handle_dis_rw_protect(uint8_t *pBuffer);
+
+/*
+ * Helper functions
+ */
+uint8_t Mem_u8FlashWrite(uint8_t *dBuffer, uint32_t Cpy_u32MemAddr, uint32_t Cpy_u32Len)
+{
+    uint8_t Loc_u8Status = HAL_OK;
+    HAL_FLASH_Unlock();
+
+    // Ensure memory address is aligned to 16-bit (half-word)
+    if (Cpy_u32MemAddr % 2 != 0) {
+        return HAL_ERROR;
+    }
+
+    for (uint32_t i = 0; i < Cpy_u32Len; i += 2) // Write 2 bytes at a time
+    {
+        uint16_t data = (dBuffer[i+1] << 8) | dBuffer[i];  // Combine 2 bytes
+        Loc_u8Status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, Cpy_u32MemAddr + i, data);
+
+        if (Loc_u8Status != HAL_OK) {
+            break; // Stop on error
+        }
+    }
+
+    HAL_FLASH_Lock();
+    return Loc_u8Status;
+}
+
+void bootloader_send_ack(uint8_t command_code, uint8_t follow_len)
+{
+	 //here we send 2 byte.. first byte is ack and the second byte is len value
+	uint8_t ack_buf[2];
+	ack_buf[0] = BL_ACK;
+	ack_buf[1] = follow_len;
+	HAL_UART_Transmit(&huart2,ack_buf,2,HAL_MAX_DELAY);
+
+}
+void bootloader_send_nack(void){
+	uint8_t nack = BL_NACK;
+	HAL_UART_Transmit(&huart2,&nack,1,HAL_MAX_DELAY);
+}
+
+uint8_t bootloader_verify_crc (uint8_t *pData, uint32_t len, uint32_t crc_host)
+{
+    uint32_t uwCRCValue=0xff;
+
+    for (uint32_t i=0 ; i < len ; i++)
+	{
+        uint32_t i_data = pData[i];
+        uwCRCValue = HAL_CRC_Accumulate(&hcrc, &i_data, 1);
+	}
+
+	 /* Reset CRC Calculation Unit */
+  __HAL_CRC_DR_RESET(&hcrc);
+
+	if( uwCRCValue == crc_host)
+	{
+		return VERIFY_CRC_SUCCESS;
+	}
+
+	return VERIFY_CRC_FAIL;
+}
+uint32_t get_bootloader_version(void){
+	return (uint32_t)BL_VERSION;
+}
+/* This function writes data in to C_UART */
+void bootloader_uart_write_data(uint8_t *pBuffer,uint32_t len)
+{
+    //Function used to send data from bootloader to Host
+	HAL_UART_Transmit(&huart2 ,pBuffer,len,HAL_MAX_DELAY);
+
+}
+
+uint16_t get_mcu_chip_id(void){
+	uint16_t cid;
+	cid = (uint16_t)(DBGMCU->IDCODE) & 0x0FFF;
+	return cid;
+}
+uint8_t get_flash_rdp_level(void){
+	uint8_t RDP_Status = 0;
+	volatile uint32_t* POB = (uint32_t* ) 0x1FFFF800;
+
+	RDP_Status = (uint8_t)(*POB >> 8);
+	return RDP_Status;
+}
+uint8_t verify_address(uint32_t go_address){
+	if(go_address >= FLASH_ADDR_START && go_address <= FLASH_ADDR_END){
+		return ADDR_VALID;
+	}
+	else if(go_address >= SYSMEM_ADDR_START && go_address <= SYSMEM_ADDR_END){
+		return ADDR_VALID;
+
+	}
+	else if(go_address >= SRAM_ADDR_START && go_address <= SRAM_ADDR_END){
+		return ADDR_VALID;
+	}
+	return ADDR_INVALID;
+
+}
+uint8_t erase_flash_page(uint32_t page_number, uint32_t num_pages) {
+    FLASH_EraseInitTypeDef erase_init;
+    uint32_t page_error;
+
+    if ((page_number * FLASH_PAGE_SIZE) >= (USER_APP_ADDRESS - FLASH_BASE_ADDRESS)) {
+        HAL_FLASH_Unlock();  // Unlock flash memory for writing
+
+        erase_init.TypeErase = FLASH_TYPEERASE_PAGES;
+        erase_init.PageAddress = FLASH_BASE_ADDRESS + (page_number * FLASH_PAGE_SIZE);
+        //erase_init.PageAddress = 0x08000000 + (start_page * 1024);
+        erase_init.NbPages = num_pages;
+
+        if (HAL_FLASHEx_Erase(&erase_init, &page_error) == HAL_OK) {
+            HAL_FLASH_Lock();  // Lock flash after operation
+            return FLASH_SUCCESS;
+        } else {
+            HAL_FLASH_Lock();
+            return FLASH_ERROR;
+        }
+    }
+    return FLASH_INVALID_ADDR;
+}
+uint8_t execute_mem_write(uint8_t *pBuffer, uint32_t mem_address, uint32_t len){
+    uint8_t status = HAL_OK;
+    HAL_FLASH_Unlock();
+
+    for(uint32_t i = 0; i < len; i += 2){  // Write 2 bytes at a time
+        uint16_t data = (pBuffer[i+1] << 8) | pBuffer[i];  // Combine 2 bytes
+        status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, mem_address + i, data);
+        if(status != HAL_OK) {
+            break;  // Stop on error
+        }
+    }
+
+    HAL_FLASH_Lock();
+    return status;
+}
+
+
+
+
+uint8_t configure_flash_sector_rw_protection(uint8_t sector_details, uint8_t protection_mode, uint8_t disable);
+
+uint16_t read_OB_rw_protection_status(void);
+
+/* USER CODE END 4 */
+
+/**
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
+void Error_Handler(void)
+{
+  /* USER CODE BEGIN Error_Handler_Debug */
+  /* User can add his own implementation to report the HAL error return state */
+  __disable_irq();
+  while (1)
+  {
+  }
+  /* USER CODE END Error_Handler_Debug */
+}
+
+#ifdef  USE_FULL_ASSERT
+/**
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
+void assert_failed(uint8_t *file, uint32_t line)
+{
+  /* USER CODE BEGIN 6 */
+  /* User can add his own implementation to report the file name and line number,
+     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+  /* USER CODE END 6 */
+}
+#endif /* USE_FULL_ASSERT */
+
+/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

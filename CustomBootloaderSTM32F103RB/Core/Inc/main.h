@@ -45,6 +45,14 @@ extern "C" {
 #define SRAM_ADDR_START         0x20000000
 #define SRAM_ADDR_END           0x20001FFF
 
+
+#define FLASH_BASE_ADDRESS 		0x08000000
+#define USER_APP_ADDRESS   		0x08004000
+
+#define FLASH_SUCCESS      		0x00
+#define FLASH_ERROR        		0x01
+#define FLASH_INVALID_ADDR 		0x02
+
 void  bootloader_uart_read_data(void);
 void bootloader_jump_to_user_app(void);
 
@@ -71,7 +79,7 @@ void bootloader_uart_write_data(uint8_t *pBuffer,uint32_t len);
 uint16_t get_mcu_chip_id(void);
 uint8_t get_flash_rdp_level(void);
 uint8_t verify_address(uint32_t go_address);
-uint8_t execute_flash_erase(uint8_t sector_number , uint8_t number_of_sector);
+uint8_t erase_flash_page(uint32_t page_number, uint32_t num_pages);
 uint8_t execute_mem_write(uint8_t *pBuffer, uint32_t mem_address, uint32_t len);
 
 uint8_t configure_flash_sector_rw_protection(uint8_t sector_details, uint8_t protection_mode, uint8_t disable);
@@ -135,6 +143,7 @@ uint16_t read_OB_rw_protection_status(void);
 #define ADDR_INVALID 0x00
 
 #define INVALID_SECTOR 0x04
+
 
 
 /* USER CODE END Includes */
