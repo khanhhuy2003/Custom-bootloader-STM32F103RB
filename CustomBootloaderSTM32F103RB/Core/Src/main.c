@@ -24,9 +24,16 @@
 /* USER CODE BEGIN Includes */
 #include "string.h"
 #include "stdarg.h"
-
+#include "sha256.h"
 #define USER_APP_ADDRESS  0x8004000
 uint8_t Mem_u8FlashWrite(uint8_t *dBuffer, uint32_t Cpy_u32MemAddr,uint32_t Cpy_u32Len);
+
+uint8_t expected_sha256_hash[32] = {0};
+
+// Function to receive SHA-256 from the host
+void bootloader_store_sha256(uint8_t *hash) {
+    memcpy(expected_sha256_hash, hash, 32);
+}
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -176,10 +183,10 @@ int main(void)
   //HAL_GPIO_EXTI_Callback(GPIO_PIN_13);
   /* USER CODE END 2 */
   if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_RESET){
-	  printmsg("Enter bootloader mode\n");
+	  //printmsg("Enter bootloader mode\n");
 	  bootloader_uart_read_data();
   }else{
-	  printmsg("Jump to user application\n");
+	  //printmsg("Jump to user application\n");
 	  bootloader_jump_to_user_app();
 
   }
@@ -480,48 +487,50 @@ void bootloader_handle_getrdp_cmd(uint8_t *pBuffer){
         bootloader_send_nack();
     }
 }
-//void bootloader_handle_go_cmd(uint8_t *pBuffer){
-//	uint32_t command_packet_len = bl_rx_buffer[0] + 1;
-//	uint32_t host_crc = *((uint32_t*)(bl_rx_buffer + command_packet_len - 4));
-//
-//	if (!bootloader_verify_crc(&bl_rx_buffer[0], command_packet_len - 4, host_crc)){
-//
-//		bootloader_send_ack(pBuffer[0], 1);
-//
-//		uint32_t goToAddress = *(uint32_t*)&pBuffer[2]; // get all 4 bytes
-//		if(verify_address(goToAddress) == ADDR_VALID){
-//			uint8_t addr_status = ADDR_VALID;
-//			HAL_UART_Transmit(&huart2, &addr_status, 1, HAL_MAX_DELAY);
-//
-//            __disable_irq();
-//
-//            // Set MSP
-//            __set_MSP(*(uint32_t*)goToAddress);
-//
-//            void (*Jump_To_APP)(void) = (void (*)(void))(*(volatile uint32_t*)(goToAddress + 4));
-//            Jump_To_APP();
-//		}
-//		else{
-//			uint8_t addr_status = ADDR_INVALID;
-//			HAL_UART_Transmit(&huart2, (uint8_t*)addr_status, 1, HAL_MAX_DELAY);
-//		}
-//	}
-//	else{
-//		bootloader_send_nack();
-//	}
-//}
+
+
+uint8_t verify_firmware_sha256(uint32_t firmwareAddr, uint32_t size) {
+    if (size == 0 || size > 0x10000) {
+        return 0;
+    }
+
+    SHA256_CTX ctx;
+    uint8_t calculated_hash[32];
+
+    sha256_init(&ctx);
+    sha256_update(&ctx, (uint8_t *)firmwareAddr, size);
+    sha256_final(&ctx, calculated_hash);
+
+    if (memcmp(calculated_hash, expected_sha256_hash, 32) == 0) {
+        return 0; // Hash matches
+    } else {
+        return 1; // Hash mismatch
+    }
+}
 void bootloader_handle_go_cmd(uint8_t *pBuffer) {
     uint32_t command_packet_len = bl_rx_buffer[0] + 1;
-    uint32_t host_crc = *((uint32_t*)(bl_rx_buffer + command_packet_len - 4));
-
-    if (!bootloader_verify_crc(&bl_rx_buffer[0], command_packet_len - 4, host_crc)) {
         bootloader_send_ack(pBuffer[0], 1);
 
         uint32_t goToAddress = *(uint32_t*)&pBuffer[2]; // Extract jump address
+        uint32_t firmware_size = *(uint32_t*)&pBuffer[6]; // Extract firmware size (4 byte)
+        uint8_t *received_hash = &pBuffer[10]; // Extract SHA-256 (32 bytes)
+        bootloader_store_sha256(received_hash);
 
         if (verify_address(goToAddress) == ADDR_VALID) {
             uint8_t addr_status = ADDR_VALID;
+            uint8_t sha256_status;
             HAL_UART_Transmit(&huart2, &addr_status, 1, HAL_MAX_DELAY);
+
+            // Verify SHA-256 before jumping
+            if (verify_firmware_sha256(goToAddress, firmware_size)) {
+            	sha256_status = SHA256_FAIL;
+                HAL_UART_Transmit(&huart2, &sha256_status, 1, HAL_MAX_DELAY);
+                return;
+
+            }
+            else{
+            sha256_status = SHA256_OK;
+            HAL_UART_Transmit(&huart2, &sha256_status, 1, HAL_MAX_DELAY);
 
             __disable_irq();
 
@@ -537,20 +546,17 @@ void bootloader_handle_go_cmd(uint8_t *pBuffer) {
                 HAL_UART_Transmit(&huart2, (uint8_t*)"Invalid reset handler\r\n", 25, HAL_MAX_DELAY);
                 return;
             }
+            //HAL_UART_Transmit(&huart2, &addr_status, 1, HAL_MAX_DELAY);
             __set_MSP(app_msp);  // Set new stack pointer
             SCB->VTOR = goToAddress;  // Set new vector table
 
             // Function pointer to application reset handler
             void (*Jump_To_APP)(void) = (void (*)(void))app_reset_handler;
 
-            Jump_To_APP();  // Jump to application
-        } else {
-            uint8_t addr_status = ADDR_INVALID;
-            HAL_UART_Transmit(&huart2, &addr_status, 1, HAL_MAX_DELAY);
+            Jump_To_APP();
         }
-    } else {
-        bootloader_send_nack();
     }
+
 }
 void bootloader_handle_flash_erase_cmd(uint8_t *pBuffer) {
     uint32_t command_packet_len = pBuffer[0] + 1;
@@ -591,8 +597,6 @@ void bootloader_handle_mem_write_cmd(uint8_t *pBuffer)
         	status = ADDR_INVALID;
             HAL_UART_Transmit(&huart2, (uint8_t*)&status, 1, HAL_MAX_DELAY);
         }
-
-
 }
 void bootloader_handle_en_rw_protect(uint8_t *pBuffer);
 void bootloader_handle_mem_read (uint8_t *pBuffer);

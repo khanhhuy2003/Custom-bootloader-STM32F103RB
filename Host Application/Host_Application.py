@@ -3,6 +3,7 @@ import struct
 import os
 import sys
 import glob
+import hashlib
 
 Flash_HAL_OK                                        = 0x00
 Flash_HAL_ERROR                                     = 0x01
@@ -81,6 +82,12 @@ def get_crc(buff, length):
             else:
                 Crc = (Crc << 1)
     return Crc
+def compute_sha256(filename):
+    sha256 = hashlib.sha256()
+    with open(filename, "rb") as f:
+        while chunk := f.read(4096):
+            sha256.update(chunk)
+    return sha256.digest()
 
 #----------------------------- Serial Port ----------------------------------------
 def serial_ports():
@@ -182,11 +189,32 @@ def process_COMMAND_BL_GET_RDP_STATUS(length):
     rdp = bytearray(value)
     print("\n   RDP Status : ",hex(rdp[0]))
 
+# def process_COMMAND_BL_GO_TO_ADDR(length):
+#     addr_status=0
+#     value = read_serial_port(length)
+#     addr_status = bytearray(value)
+#     print("\n   Address Status : ",hex(addr_status[0]))
+
 def process_COMMAND_BL_GO_TO_ADDR(length):
-    addr_status=0
-    value = read_serial_port(length)
-    addr_status = bytearray(value)
-    print("\n   Address Status : ",hex(addr_status[0]))
+    # Read the first byte (Address Status)
+    addr_status = read_serial_port(1)
+    
+    if len(addr_status) == 0:
+        print("\n   ❌ Timeout: No response from bootloader")
+        return
+
+    addr_status = addr_status[0]
+    print("\n   Address Status : ", hex(addr_status))
+
+    # If address is valid, read the 32-byte SHA-256 hash
+    if addr_status == 0x1:  # Assuming 0x1 means valid address
+        sha256_hash = read_serial_port(32)  # Read the SHA-256 hash (32 bytes)
+        
+        if len(sha256_hash) == 32:
+            print("\n   STM32 SHA-256 Hash: ", " ".join(f"{b:02X}" for b in sha256_hash))
+        else:
+            print("\n   ❌ Error: SHA-256 hash not received correctly")
+
 
 def process_COMMAND_BL_FLASH_ERASE(length):
     erase_status=0
@@ -397,26 +425,39 @@ def decode_menu_command_code(command):
         ret_value = read_bootloader_reply(data_buf[1])
     elif(command == 5):
         print("\n   Command == > BL_GO_TO_ADDR")
-        go_address  = input("\n   Please enter 4 bytes go address in hex:")
+        go_address = input("\n   Please enter 4 bytes go address in hex: ")
         go_address = int(go_address, 16)
-        data_buf[0] = COMMAND_BL_GO_TO_ADDR_LEN-1 
-        data_buf[1] = COMMAND_BL_GO_TO_ADDR 
-        data_buf[2] = word_to_byte(go_address,1,1) 
-        data_buf[3] = word_to_byte(go_address,2,1) 
-        data_buf[4] = word_to_byte(go_address,3,1) 
-        data_buf[5] = word_to_byte(go_address,4,1) 
-        crc32       = get_crc(data_buf,COMMAND_BL_GO_TO_ADDR_LEN-4) 
-        data_buf[6] = word_to_byte(crc32,1,1) 
-        data_buf[7] = word_to_byte(crc32,2,1) 
-        data_buf[8] = word_to_byte(crc32,3,1) 
-        data_buf[9] = word_to_byte(crc32,4,1) 
 
-        Write_to_serial_port(data_buf[0],1)
-        
-        for i in data_buf[1:COMMAND_BL_GO_TO_ADDR_LEN]:
-            Write_to_serial_port(i,COMMAND_BL_GO_TO_ADDR_LEN-1)
-        
+        firmware_size = calc_file_len()  # Get firmware size
+        firmware_hash = compute_sha256("UserApplication.bin")  # Get 32-byte SHA256
+
+        data_buf = bytearray(41)  # Total length is 1 + 1 + 4 + 4 + 32 + 4 = 46 bytes
+
+        data_buf[0] = len(data_buf) - 1  # Packet length (excluding itself)
+        data_buf[1] = COMMAND_BL_GO_TO_ADDR  # Command code
+
+        # Store 4-byte address (Little-Endian)
+        data_buf[2:6] = struct.pack('<I', go_address)
+
+        # Store 4-byte firmware size (Little-Endian)
+        data_buf[6:10] = struct.pack('<I', firmware_size)
+
+        # Store 32-byte SHA-256 hash
+        data_buf[10:42] = firmware_hash
+
+        # Compute CRC32 and store in last 4 bytes
+    #    crc32 = get_crc(data_buf, len(data_buf) - 4)
+    #     data_buf[42:46] = struct.pack('<I', crc32) 
+
+        # Send Data Over Serial
+        print(f"📤 Sending Packet: {[hex(x) for x in data_buf]}")
+        Write_to_serial_port(data_buf[0], 1)  # Send packet length first
+        for i in data_buf[1:]:
+            Write_to_serial_port(i, 1)  # Send each byte
+
         ret_value = read_bootloader_reply(data_buf[1])
+
+
         
     elif(command == 6):
         print("\n   Command == > BL_FLASH_MASS_ERASE")

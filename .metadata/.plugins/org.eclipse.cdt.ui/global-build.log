@@ -1,4 +1,4 @@
-20:20:17 **** Incremental Build of configuration Debug for project CustomBootloaderSTM32F103RB ****
+10:14:51 **** Incremental Build of configuration Debug for project CustomBootloaderSTM32F103RB ****
 make -j8 all 
 arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m3 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32F103xB -c -I../Core/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc -I../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32F1xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
 ../Core/Src/main.c:28: warning: "USER_APP_ADDRESS" redefined
@@ -9,8 +9,8 @@ In file included from ../Core/Src/main.c:21:
    50 | #define USER_APP_ADDRESS     0x08004000
       | 
 ../Core/Src/main.c: In function 'bootloader_handle_getrdp_cmd':
-../Core/Src/main.c:475:36: warning: passing argument 1 of 'bootloader_uart_write_data' makes pointer from integer without a cast [-Wint-conversion]
-  475 |         bootloader_uart_write_data(RDP_value, 2);
+../Core/Src/main.c:482:36: warning: passing argument 1 of 'bootloader_uart_write_data' makes pointer from integer without a cast [-Wint-conversion]
+  482 |         bootloader_uart_write_data(RDP_value, 2);
       |                                    ^~~~~~~~~
       |                                    |
       |                                    uint16_t {aka short unsigned int}
@@ -18,19 +18,23 @@ In file included from ../Core/Src/main.c:21:
 ../Core/Inc/main.h:77:42: note: expected 'uint8_t *' {aka 'unsigned char *'} but argument is of type 'uint16_t' {aka 'short unsigned int'}
    77 | void bootloader_uart_write_data(uint8_t *pBuffer,uint32_t len);
       |                                 ~~~~~~~~~^~~~~~~
+../Core/Src/main.c: In function 'bootloader_handle_go_cmd':
+../Core/Src/main.c:511:14: warning: unused variable 'command_packet_len' [-Wunused-variable]
+  511 |     uint32_t command_packet_len = bl_rx_buffer[0] + 1;
+      |              ^~~~~~~~~~~~~~~~~~
 ../Core/Src/main.c: In function 'bootloader_handle_mem_write_cmd':
-../Core/Src/main.c:578:14: warning: unused variable 'Loc_u32CommandBacketLen' [-Wunused-variable]
-  578 |     uint32_t Loc_u32CommandBacketLen = pBuffer[0] + 1;
+../Core/Src/main.c:584:14: warning: unused variable 'Loc_u32CommandBacketLen' [-Wunused-variable]
+  584 |     uint32_t Loc_u32CommandBacketLen = pBuffer[0] + 1;
       |              ^~~~~~~~~~~~~~~~~~~~~~~
-../Core/Src/main.c:573:13: warning: unused variable 'Loc_u8Len' [-Wunused-variable]
-  573 |     uint8_t Loc_u8Len = pBuffer[0];
+../Core/Src/main.c:579:13: warning: unused variable 'Loc_u8Len' [-Wunused-variable]
+  579 |     uint8_t Loc_u8Len = pBuffer[0];
       |             ^~~~~~~~~
 At top level:
-../Core/Src/main.c:332:13: warning: 'MX_USART3_UART_Init' defined but not used [-Wunused-function]
-  332 | static void MX_USART3_UART_Init(void)
+../Core/Src/main.c:339:13: warning: 'MX_USART3_UART_Init' defined but not used [-Wunused-function]
+  339 | static void MX_USART3_UART_Init(void)
       |             ^~~~~~~~~~~~~~~~~~~
-../Core/Src/main.c:266:13: warning: 'MX_USART1_UART_Init' defined but not used [-Wunused-function]
-  266 | static void MX_USART1_UART_Init(void)
+../Core/Src/main.c:273:13: warning: 'MX_USART1_UART_Init' defined but not used [-Wunused-function]
+  273 | static void MX_USART1_UART_Init(void)
       |             ^~~~~~~~~~~~~~~~~~~
 arm-none-eabi-gcc -o "CustomBootloaderSTM32F103RB.elf" @"objects.list"   -mcpu=cortex-m3 -T"C:\Users\ASUS\Desktop\Custom-bootloader-STM32F103RB\CustomBootloaderSTM32F103RB\STM32F103RBTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="CustomBootloaderSTM32F103RB.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 Finished building target: CustomBootloaderSTM32F103RB.elf
@@ -40,11 +44,11 @@ arm-none-eabi-objdump -h -S  CustomBootloaderSTM32F103RB.elf  > "CustomBootloade
 arm-none-eabi-objcopy  -O ihex  CustomBootloaderSTM32F103RB.elf  "CustomBootloaderSTM32F103RB.hex"
 arm-none-eabi-objcopy  -O binary  CustomBootloaderSTM32F103RB.elf  "CustomBootloaderSTM32F103RB.bin"
    text	   data	    bss	    dec	    hex	filename
-   9724	     32	   2024	  11780	   2e04	CustomBootloaderSTM32F103RB.elf
+  12024	     32	   2056	  14112	   3720	CustomBootloaderSTM32F103RB.elf
 Finished building: default.size.stdout
  
-Finished building: CustomBootloaderSTM32F103RB.bin
 Finished building: CustomBootloaderSTM32F103RB.hex
+Finished building: CustomBootloaderSTM32F103RB.bin
  
  
 Finished building: CustomBootloaderSTM32F103RB.list
